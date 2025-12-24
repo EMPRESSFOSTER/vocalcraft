@@ -2,6 +2,7 @@ import { ArrowRight, Bot, GitBranch, Music, Palette, ShieldCheck, UploadCloud, Z
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Link from 'next/link';
+import SongCreationForm from '@/components/song-creation-form';
 
 export default function Home() {
   return (
@@ -106,18 +107,18 @@ export default function Home() {
 
         {/* Create Section */}
         <section id="create" className="py-20 md:py-28 bg-card/20">
-          <div className="container text-center">
-            <h2 className="text-3xl md:text-4xl font-bold">Ready to Create?</h2>
-            <p className="mt-4 text-muted-foreground max-w-xl mx-auto">
-              You're just moments away from hearing your voice like never before. Start the process now.
-            </p>
-            <div className="mt-8">
-              <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                <Link href="/">
-                  Go to the App <ArrowRight className="ml-2" />
-                </Link>
-              </Button>
+          <div className="container">
+            <div className="text-center max-w-2xl mx-auto mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold">Ready to Create?</h2>
+              <p className="mt-4 text-muted-foreground">
+                You're just moments away from hearing your voice like never before. Start the process now.
+              </p>
             </div>
+            <Card className="max-w-4xl mx-auto shadow-2xl">
+              <CardContent className="p-6 md:p-10">
+                <SongCreationForm />
+              </CardContent>
+            </Card>
           </div>
         </section>
       </main>
@@ -138,7 +139,7 @@ export default function Home() {
             </nav>
             <div className="flex justify-center md:justify-end">
               <Button asChild variant="outline" className="bg-transparent">
-                <Link href="/">
+                <Link href="#create">
                   Create Your Music
                 </Link>
               </Button>
