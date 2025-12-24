@@ -1,0 +1,122 @@
+/**
+ * This ruleset enforces a strict user-ownership model for a simple user profile and project application.
+ *
+ * Core Philosophy:
+ * The security model is built on the principle of least privilege. Users have complete control over their own
+ * profile data and the projects they create, but they cannot see or modify the data of other users.
+ * Publicly readable data is explicitly defined and separated from private data.
+ *
+ * Data Structure:
+ * - /users/{userId}: Contains private user profile information. Each user can only access the document
+ *   matching their own user ID.
+ * - /projects/{projectId}: A top-level collection for user-generated projects. This data is intended
+ *   to be publicly readable, but write access is restricted to the original author.
+ *
+ * Key Security Decisions:
+ * - User Isolation: Users are strictly sandboxed. There is no ability for one user to read, list, or
+ *   write another user's profile information in the `/users` collection.
+ * - Public Projects: The `/projects` collection is publicly readable to allow for browsing and sharing,
+ *   but creation, modification, and deletion are restricted to the owner.
+ * - No User Listing: To protect user privacy, listing the entire `/users` collection is disabled.
+ *
+ * Denormalization for Authorization:
+ * Write rules for `/projects/{projectId}` depend on a denormalized `userId` field within each project
+ * document. This avoids costly and slow `get()` calls to other documents, ensuring that authorization
+ * decisions are fast and efficient. It is critical that the client application includes this field when
+ * creating or updating project documents.
+ *
+ * Structural Segregation:
+ * The ruleset separates strictly private user data (`/users`) from user-generated content that is
+ * publicly visible (`/projects`). This structural choice provides better security and performance for
+ * list operations compared to mixing public and private documents in a single collection.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------------
+    // Helper Functions
+    // ------------------------------------------------------------------------
+
+    /**
+     * Checks if the user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Checks if the authenticated user's UID matches the provided userId.
+     * This is the primary function for verifying document ownership.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * A robust check for update/delete operations, ensuring the user is the
+     * owner AND the document already exists.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * On create, validates that the new user document's internal `id` field
+     * matches the user's auth UID and the document's path ID.
+     */
+    function hasValidUserDataOnCreate(userId) {
+      let data = request.resource.data;
+      return data.id == userId;
+    }
+
+    /**
+     * On update, ensures that the user document's internal `id` field is
+     * immutable and cannot be changed after creation.
+     */
+    function isImmutableUserData() {
+      return request.resource.data.id == resource.data.id;
+    }
+
+    // ------------------------------------------------------------------------
+    // Collection Rules
+    // ------------------------------------------------------------------------
+
+    /**
+     * @description Controls access to a user's private profile document.
+     * @path /users/{userId}
+     * @allow (get, create, update, delete) A signed-in user (auth.uid='user123') accessing their own document at `/users/user123`.
+     * @deny (get, create, update, delete) A signed-in user (auth.uid='user456') attempting to access `/users/user123`.
+     * @deny (list) Any user attempting to list documents in the `/users` collection.
+     * @principle Restricts access to a user's own data tree, preventing cross-user data access.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && hasValidUserDataOnCreate(userId);
+      allow update: if isExistingOwner(userId) && isImmutableUserData();
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Controls access to user-generated project documents.
+     * @path /projects/{projectId}
+     * @allow (get, list) Any user, signed-in or not, can read project documents.
+     * @deny (create, update, delete) Any user attempting to write without a valid `userId` field in the document.
+     * @principle Implements a "Public Read, Owner-Only Write" model. Writes are currently disabled pending a schema update.
+     */
+    match /projects/{projectId} {
+      allow get: if true;
+      allow list: if true;
+
+      // CRITICAL: Cannot implement owner-only writes. The 'Project' entity is missing a 'userId' or 'ownerId' field in the IR.
+      // These rules are disabled for security. To enable them, ensure each Project document contains a `userId` field
+      // that stores the UID of the user who created it, then implement the validation logic.
+      // Example create rule: `allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;`
+      // Example update/delete rule: `allow update, delete: if resource != null && isOwner(resource.data.userId);`
+      allow create: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow update: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
+    }
+  }
+}

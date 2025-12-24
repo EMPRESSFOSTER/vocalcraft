@@ -1,0 +1,91 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user in the VocalCraft AI platform.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user entity."
+        },
+        "email": {
+          "type": "string",
+          "description": "User's email address.",
+          "format": "email"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User's display name."
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "URL of the user's profile picture.",
+          "format": "uri"
+        },
+        "plan": {
+          "type": "string",
+          "description": "Subscription plan of the user (e.g., free, premium)."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp of when the user account was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp of when the user account was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "email"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Collection for storing user profile data.  Uses path-based ownership for security.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/projects/{projectId}",
+        "definition": {
+          "entityName": "Project",
+          "schema": {
+            "$ref": "#/backend/entities/Project"
+          },
+          "description": "Collection for storing user generated project information. Contains denormalized 'userId' field for authorization independence. Each document in this collection stores song project information.",
+          "params": [
+            {
+              "name": "projectId",
+              "description": "The unique identifier for the project."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "This Firestore structure prioritizes authorization independence and simplifies security rules. The core strategy is path-based ownership and denormalization to avoid using `get()` calls in security rules, thus ensuring atomic operations and easier debugging. The structure is segregated into `/users/{userId}` for private user data, and `/projects/{projectId}` for song projects. The project documents include the `userId` field (denormalization). This ensures that each project has an associated creator. Since security rules must not act as filters, all documents within a collection must share a common security profile. Thus, private user data is stored under the `/users/{userId}` collection, and user-generated project data is stored in `/projects`. This enables efficient and secure `list` operations, fulfilling the QAPs requirement. The structure uses the Access Modeling strategy, with path-based ownership of user profiles and denormalized ownership within the project documents."
+  }
+}
