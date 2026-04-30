@@ -1,13 +1,14 @@
 'use server';
 
 import { enhanceVoiceAndSing, EnhanceVoiceAndSingInput } from '@/ai/flows/enhance-voice-and-sing';
+import { generateInstrumental, GenerateInstrumentalInput } from '@/ai/flows/generate-instrumental';
 import { suggestGenre, SuggestGenreInput } from '@/ai/flows/suggest-genre';
 import { z } from 'zod';
 
 const generateSongSchema = z.object({
   lyrics: z.string().min(10, "Lyrics must be at least 10 characters long."),
   voiceDataUri: z.string().min(1, "A voice recording is required."),
-  genre: z.enum(['Afrobeats', 'Pop', 'R&B', 'Hip-Hop', 'Gospel']),
+  genre: z.enum(['Afrobeats', 'Pop', 'R&B', 'Hip-Hop', 'Gospel', 'Soul']),
   tempo: z.enum(['slow', 'mid', 'fast']),
   tone: z.enum(['soft', 'deep', 'bright', 'raspy']),
 });
@@ -24,25 +25,34 @@ export async function generateSongAction(values: z.infer<typeof generateSongSche
   const input: EnhanceVoiceAndSingInput = validatedFields.data;
 
   try {
-    // To simulate a real-world scenario, we'll return a mock audio file after a delay.
-    // In a production app, you would uncomment the line below to call the actual AI flow.
-    // const result = await enhanceVoiceAndSing(input);
+    console.log("Generating song metadata with Gemini...", input.lyrics.substring(0, 30));
     
-    console.log("Simulating AI song generation with input:", input);
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    // Step 1: Vocal processing
+    const vocalResult = await enhanceVoiceAndSing(input);
+    console.log("Vocal processing complete. Data received length:", vocalResult.enhancedVoiceDataUri.length);
 
-    // This is a placeholder for a real audio file data URI.
-    // It's a short, silent WAV file encoded in Base64 to prevent errors.
-    const mockAudioDataUri = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=";
+    // Step 2: Instrumental generation
+    const instrumentalResult = await generateInstrumental({
+      genre: input.genre,
+      tempo: input.tempo,
+      tone: input.tone,
+      lyrics: input.lyrics
+    });
+    console.log("Instrumental generation complete. Data received length:", instrumentalResult.instrumentalDataUri.length);
     
-    const result = { enhancedVoiceDataUri: mockAudioDataUri };
+    // We combine the results
+    const result = { 
+        enhancedVoiceDataUri: vocalResult.enhancedVoiceDataUri,
+        instrumentalDataUri: instrumentalResult.instrumentalDataUri
+    };
 
+    console.log("Returning successful result to UI");
     return { success: true, data: result };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("AI song generation failed:", error);
     return {
-      error: "Failed to generate the song. Please try again later.",
+      error: error?.message || "Failed to generate the song. Please try again later.",
     };
   }
 }
@@ -63,7 +73,9 @@ export async function suggestGenreAction(values: z.infer<typeof suggestGenreSche
     const input: SuggestGenreInput = validatedFields.data;
 
     try {
+        console.log("Suggesting genre for lyrics:", input.lyrics.substring(0, 30));
         const result = await suggestGenre(input);
+        console.log("AI suggested genre:", result.genre);
         return { success: true, data: result };
     } catch (error) {
         console.error("AI genre suggestion failed:", error);

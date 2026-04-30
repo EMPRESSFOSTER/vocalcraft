@@ -1,8 +1,8 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ChevronLeft, ChevronRight, Download, Loader2, Mic, Music4, Palette, Sparkles, Upload, Wind } from 'lucide-react';
-import { useState, useTransition } from 'react';
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Download, Loader2, Mic, Music4, Palette, Play, Square, Sparkles, Upload, Wind } from 'lucide-react';
+import { useState, useTransition, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 
@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
@@ -23,7 +24,7 @@ const formSchema = z.object({
     message: 'Please enter at least 20 characters for the lyrics.',
   }),
   voiceFile: z.any().refine((files) => files?.length == 1, 'Voice recording is required.'),
-  genre: z.enum(['Afrobeats', 'Pop', 'R&B', 'Hip-Hop', 'Gospel'], {
+  genre: z.enum(['Afrobeats', 'Pop', 'R&B', 'Hip-Hop', 'Gospel', 'Soul'], {
     required_error: 'You need to select a music genre.',
   }),
   tempo: z.enum(['slow', 'mid', 'fast'], {
@@ -61,6 +62,60 @@ export default function SongCreationForm() {
       consent: false,
     },
   });
+
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      chunksRef.current = [];
+
+      mediaRecorderRef.current.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorderRef.current.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        const file = new File([blob], "recording.webm", { type: 'audio/webm' });
+        
+        setFileName("Record Voice");
+        form.setValue('voiceFile', [file], { shouldValidate: true });
+        
+        // Stop all tracks to release microphone
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      toast({
+        variant: 'destructive',
+        title: 'Microphone Error',
+        description: "Could not access microphone. Please check permissions.",
+      });
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
 
   const fileRef = form.register('voiceFile');
 
@@ -108,32 +163,58 @@ export default function SongCreationForm() {
     const lyrics = form.getValues('lyrics');
     if (!lyrics || lyrics.length < 20) {
       form.setError('lyrics', { message: 'Please enter at least 20 characters to suggest a genre.'});
+      toast({
+        variant: 'destructive',
+        title: 'Not Enough Lyrics',
+        description: 'Please write at least 20 characters before suggesting a genre.',
+      });
       return;
     }
+    
     startGenreSuggestion(async () => {
-        const result = await suggestGenreAction({ lyrics });
-        if (result.error) {
-          toast({
-            variant: 'destructive',
-            title: 'Suggestion Failed',
-            description: result.error,
-          });
-        } else if (result.success && result.data?.genre) {
-          const genreOptions: Array<FormData['genre']> = ['Afrobeats', 'Pop', 'R&B', 'Hip-Hop', 'Gospel'];
-          const suggested = genreOptions.find(g => g.toLowerCase() === result.data.genre.toLowerCase());
+        try {
+          console.log('Calling suggestGenreAction with lyrics:', lyrics.substring(0, 30));
+          const result = await suggestGenreAction({ lyrics });
+          console.log('suggestGenreAction result:', result);
           
-          if (suggested) {
-            form.setValue('genre', suggested);
+          if (result.error) {
             toast({
-              title: 'Genre Suggested!',
-              description: `We've set the genre to ${suggested} based on your lyrics.`,
+              variant: 'destructive',
+              title: 'Suggestion Failed',
+              description: result.error,
             });
+          } else if (result.success && result.data?.genre) {
+            const genreOptions: Array<FormData['genre']> = ['Afrobeats', 'Pop', 'R&B', 'Hip-Hop', 'Gospel', 'Soul'];
+            const suggested = genreOptions.find(g => 
+              result.data.genre.toLowerCase().includes(g.toLowerCase())
+            );
+            
+            if (suggested) {
+              form.setValue('genre', suggested, { shouldValidate: true });
+              toast({
+                title: 'Genre Suggested!',
+                description: `We've set the genre to ${suggested} based on your lyrics.`,
+              });
+            } else {
+              toast({
+                  title: 'Genre Suggested!',
+                  description: `The AI suggested "${result.data.genre}", which is not a direct option. Please select the closest match.`,
+              });
+            }
           } else {
             toast({
-                title: 'Genre Suggested!',
-                description: `The AI suggested "${result.data.genre}", which is not a direct option. Please select the closest match.`,
+              variant: 'destructive',
+              title: 'Unexpected Response',
+              description: 'The AI returned an unexpected response. Please try again.',
             });
           }
+        } catch (error) {
+          console.error('Error in handleSuggestGenre:', error);
+          toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: error instanceof Error ? error.message : 'An unknown error occurred',
+          });
         }
     });
   }
@@ -196,7 +277,16 @@ export default function SongCreationForm() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Button type="button" variant="outline" className="h-32 flex-col gap-2" disabled><Mic className="h-8 w-8"/>Record Voice <span className="text-xs text-muted-foreground">(Coming Soon)</span></Button>
+                <Button 
+                  type="button" 
+                  variant={isRecording ? "destructive" : "outline"} 
+                  className={`h-32 flex-col gap-2 ${isRecording ? 'animate-pulse' : ''}`}
+                  onClick={toggleRecording}
+                >
+                  {isRecording ? <Square className="h-8 w-8" /> : <Mic className="h-8 w-8"/>}
+                  {isRecording ? "Stop Recording" : "Record Voice"} 
+                  {isRecording && <span className="text-xs">Recording...</span>}
+                </Button>
                 <FormField control={form.control} name="voiceFile" render={() => (
                   <FormItem>
                     <FormControl>
@@ -229,7 +319,7 @@ export default function SongCreationForm() {
                   <FormLabel className="text-base font-semibold">Genre</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select a genre" /></SelectTrigger></FormControl>
-                    <SelectContent>{['Afrobeats', 'Pop', 'R&B', 'Hip-Hop', 'Gospel'].map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
+                    <SelectContent>{['Afrobeats', 'Pop', 'R&B', 'Hip-Hop', 'Gospel', 'Soul'].map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}</SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>

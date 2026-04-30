@@ -114,11 +114,13 @@ export default function Home() {
                 You're just moments away from hearing your voice like never before. Start the process now.
               </p>
             </div>
-            <Card className="max-w-4xl mx-auto shadow-2xl">
-              <CardContent className="p-6 md:p-10">
-                <SongCreationForm />
-              </CardContent>
-            </Card>
+            <div className="space-y-8">
+              <Card className="max-w-4xl mx-auto shadow-2xl">
+                <CardContent className="p-6 md:p-10">
+                  <SongCreationForm />
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </section>
       </main>

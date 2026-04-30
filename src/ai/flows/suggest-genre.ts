@@ -27,9 +27,20 @@ export async function suggestGenre(input: SuggestGenreInput): Promise<SuggestGen
 
 const prompt = ai.definePrompt({
   name: 'suggestGenrePrompt',
+  model: 'googleai/gemini-2.0-flash',
+  config: {
+    maxOutputTokens: 2048,
+    safetySettings: [
+      { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+      { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+    ],
+  },
   input: {schema: SuggestGenreInputSchema},
   output: {schema: SuggestGenreOutputSchema},
-  prompt: `You are a music genre expert. Given the following lyrics, suggest the most appropriate music genre.
+  prompt: `You are a music genre expert. Given the following lyrics, suggest the most appropriate music genre from this list: Afrobeats, Pop, R&B, Hip-Hop, Gospel, Soul.
+Only return the name of the genre.
 
 Lyrics: {{{lyrics}}}
 
