@@ -22,7 +22,7 @@ async function main() {
     } else {
       console.log('NO_MODELS_FOUND');
     }
-  } catch (e) {
+  } catch (e: any) {
     console.log('ERROR:' + (e.message || e));
   }
 }
